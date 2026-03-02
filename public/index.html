@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Mentor</title>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Rasmlarni tartibga solish */
+img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+/* Landing logotipini kichraytirish */
+.landing-logo img {
+    width: 120px; 
+    height: auto;
+}
+
+/* Sidebar va Navigatsiyadagi rasmlarni kichraytirish */
+.sidebar-logo span img, 
+.nav-item .icon img {
+    width: 24px;
+    height: 24px;
+    vertical-align: middle;
+}
+
+/* Avatar ichidagi rasmni to'g'irlash */
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+}
+:root{
+  --bg:#0a0a0f;
+  --surface:#12121a;
+  --card:#1a1a26;
+  --border:#2a2a3e;
+  --accent:#6c63ff;
+  --accent2:#ff6584;
+  --mentor:#6c63ff;
+  --gpt:#00d4aa;
+  --text:#f0f0ff;
+  --muted:#7070a0;
+  --green:#22c55e;
+  --red:#ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* ─── PAGES ─── */
+.page{display:none;min-height:100vh}
+.page.active{display:flex}
+
+/* ─── LANDING ─── */
+#landingPage{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 20px;
+  background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(108,99,255,.15) 0%,transparent 70%)}
+.landing-logo{font-size:10px;margin-bottom:16px;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.landing-title{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:700;
+  background:linear-gradient(135deg,#6c63ff,#ff6584,#00d4aa);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px}
+.landing-sub{color:var(--muted);font-size:18px;max-width:500px;margin:0 auto 40px;line-height:1.6}
+.features{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin-bottom:50px}
+.feat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:180px;text-align:center}
+.feat .icon{font-size:32px;margin-bottom:8px}
+.feat p{font-size:13px;color:var(--muted)}
+.btn-group{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.btn{padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .3s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(108,99,255,.4)}
+.btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ─── AUTH ─── */
+#authPage{flex-direction:column;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(ellipse 60% 80% at 30% 50%,rgba(108,99,255,.1) 0%,transparent 60%)}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:40px;width:100%;max-width:460px}
+.auth-tabs{display:flex;gap:8px;margin-bottom:32px;background:var(--card);border-radius:12px;padding:4px}
+.auth-tab{flex:1;padding:10px;border:none;background:none;color:var(--muted);cursor:pointer;border-radius:9px;font-size:14px;font-weight:500;transition:all .2s}
+.auth-tab.active{background:var(--accent);color:#fff}
+.auth-title{font-size:24px;font-weight:700;margin-bottom:6px}
+.auth-sub{color:var(--muted);font-size:14px;margin-bottom:24px}
+
+/* Camera */
+.cam-container{position:relative;margin-bottom:20px;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}
+#camVideo{width:100%;height:100%;object-fit:cover;display:block}
+.cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.face-ring{width:180px;height:180px;border:3px solid var(--accent);border-radius:50%;
+  box-shadow:0 0 0 4px rgba(108,99,255,.2),inset 0 0 0 4px rgba(108,99,255,.1)}
+.face-ring.scanning{animation:scan 2s ease-in-out infinite}
+.face-ring.success{border-color:var(--green);box-shadow:0 0 0 4px rgba(34,197,94,.3)}
+.face-ring.error{border-color:var(--red);box-shadow:0 0 0 4px rgba(239,68,68,.3)}
+@keyframes scan{0%,100%{opacity:.6}50%{opacity:1;transform:scale(1.03)}}
+.cam-status{text-align:center;font-size:13px;color:var(--muted);margin-bottom:16px;min-height:20px}
+.cam-status.ok{color:var(--green)}
+.cam-status.err{color:var(--red)}
+
+.inp-group{margin-bottom:16px}
+.inp-group label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+.inp{width:100%;background:var(--card);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:14px;padding:12px 14px;outline:none;transition:border-color .2s}
+.inp:focus{border-color:var(--accent)}
+.btn-full{width:100%;padding:14px;border-radius:12px;font-size:15px;font-weight:600;
+  cursor:pointer;border:none;background:linear-gradient(135deg,var(--accent),#8b5cf6);
+  color:#fff;transition:all .3s;margin-top:8px}
+.btn-full:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(108,99,255,.4)}
+.btn-full:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* ─── MAIN APP ─── */
+#appPage{flex-direction:row}
+
+/* Sidebar */
+.sidebar{width:280px;min-width:280px;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;height:100vh;position:sticky;top:0}
+.sidebar-header{padding:20px;border-bottom:1px solid var(--border)}
+.sidebar-logo{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.sidebar-logo span{font-size:22px}
+.sidebar-logo strong{font-size:16px;font-weight:700;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.user-chip{display:flex;align-items:center;gap:8px;background:var(--card);
+  border-radius:10px;padding:8px 12px}
+.user-avatar{width:32px;height:32px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.user-name{font-size:13px;font-weight:500}
+
+.sidebar-nav{padding:12px;flex:1;overflow-y:auto}
+.nav-section{font-size:11px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;
+  padding:8px 8px 4px;margin-top:8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;
+  cursor:pointer;transition:all .2s;font-size:14px;color:var(--muted);margin-bottom:2px}
+.nav-item:hover{background:var(--card);color:var(--text)}
+.nav-item.active{background:rgba(108,99,255,.15);color:var(--accent)}
+.nav-item .icon{font-size:18px;width:24px;text-align:center}
+.nav-item .badge{margin-left:auto;background:var(--accent);color:#fff;
+  font-size:10px;padding:2px 6px;border-radius:20px}
+
+.rooms-list{padding:8px 12px}
+.room-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;
+  cursor:pointer;transition:all .2s;font-size:13px;color:var(--muted);margin-bottom:2px}
+.room-item:hover{background:var(--card);color:var(--text)}
+.room-item.active{background:rgba(108,99,255,.15);color:var(--accent)}
+.room-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
+.btn-new-room{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:9px;background:var(--card);border:1px dashed var(--border);border-radius:10px;
+  color:var(--muted);cursor:pointer;font-size:13px;transition:all .2s;margin-top:8px}
+.btn-new-room:hover{border-color:var(--accent);color:var(--accent)}
+
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.btn-logout{width:100%;padding:9px;background:none;border:1px solid var(--border);
+  border-radius:10px;color:var(--muted);cursor:pointer;font-size:13px;transition:all .2s}
+.btn-logout:hover{border-color:var(--red);color:var(--red)}
+
+/* Main content */
+.main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* Chat area */
+.chat-header{padding:16px 24px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;background:var(--surface)}
+.chat-header-icon{font-size:28px}
+.chat-header-info h3{font-size:16px;font-weight:600}
+.chat-header-info p{font-size:12px;color:var(--muted)}
+.header-actions{margin-left:auto;display:flex;gap:8px}
+.btn-icon{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:7px 10px;cursor:pointer;color:var(--muted);font-size:13px;transition:all .2s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+
+.messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px}
+.messages::-webkit-scrollbar{width:6px}
+.messages::-webkit-scrollbar-track{background:transparent}
+.messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* Welcome */
+.welcome{text-align:center;padding:60px 20px;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.welcome h2{font-size:28px;font-weight:700;margin-bottom:8px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.welcome p{color:var(--muted);font-size:15px;margin-bottom:32px;max-width:400px}
+.quick-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.quick-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:10px 16px;cursor:pointer;font-size:13px;color:var(--text);transition:all .2s}
+.quick-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Messages */
+.msg{display:flex;gap:10px;max-width:75%;animation:msgIn .3s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:14px;font-weight:700;flex-shrink:0;margin-top:2px}
+.msg.user .msg-avatar{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.msg.ai-mentor .msg-avatar{background:linear-gradient(135deg,#6c63ff,#4f46e5)}
+.msg.ai-gpt .msg-avatar{background:linear-gradient(135deg,#00d4aa,#059669)}
+.msg-bubble{background:var(--card);border:1px solid var(--border);border-radius:16px;
+  padding:12px 16px;font-size:14px;line-height:1.6}
+.msg.user .msg-bubble{background:rgba(108,99,255,.2);border-color:rgba(108,99,255,.3)}
+.msg-name{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.msg.user .msg-name{text-align:right}
+
+/* Code blocks */
+.msg-bubble pre{background:#0d0d1a;border:1px solid var(--border);border-radius:10px;
+  padding:12px;margin:8px 0;overflow-x:auto;font-size:13px;position:relative}
+.msg-bubble code{font-family:'Courier New',monospace;font-size:13px}
+.copy-code-btn{position:absolute;top:8px;right:8px;background:var(--border);border:none;
+  border-radius:6px;color:var(--muted);font-size:11px;padding:4px 8px;cursor:pointer;transition:all .2s}
+.copy-code-btn:hover{background:var(--accent);color:#fff}
+.download-btn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;
+  background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);border-radius:8px;
+  color:var(--accent);font-size:12px;padding:6px 12px;cursor:pointer;transition:all .2s}
+.download-btn:hover{background:rgba(108,99,255,.3)}
+
+/* Input */
+.chat-input-area{padding:16px 24px;border-top:1px solid var(--border);background:var(--surface)}
+.input-row{display:flex;gap:10px;align-items:flex-end;background:var(--card);
+  border:1px solid var(--border);border-radius:16px;padding:8px;transition:border-color .2s}
+.input-row:focus-within{border-color:var(--accent)}
+#msgInput{flex:1;background:none;border:none;color:var(--text);font-family:inherit;
+  font-size:14px;resize:none;outline:none;max-height:120px;padding:8px;line-height:1.5}
+#msgInput::placeholder{color:var(--muted)}
+.send-btn{background:linear-gradient(135deg,var(--accent),#8b5cf6);border:none;
+  border-radius:10px;width:40px;height:40px;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;font-size:18px;transition:all .2s;flex-shrink:0}
+.send-btn:hover{transform:scale(1.05)}
+.send-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.input-hint{font-size:11px;color:var(--muted);margin-top:6px;text-align:center}
+
+/* Room modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;
+  padding:32px;width:100%;max-width:400px}
+.modal h3{font-size:20px;font-weight:700;margin-bottom:8px}
+.modal p{color:var(--muted);font-size:13px;margin-bottom:20px}
+.modal-tabs{display:flex;gap:8px;margin-bottom:20px;background:var(--card);
+  border-radius:10px;padding:4px}
+.modal-tab{flex:1;padding:8px;border:none;background:none;color:var(--muted);
+  cursor:pointer;border-radius:8px;font-size:13px;transition:all .2s}
+.modal-tab.active{background:var(--accent);color:#fff}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.btn-cancel{flex:1;padding:11px;background:var(--card);border:1px solid var(--border);
+  border-radius:10px;color:var(--muted);cursor:pointer;font-size:14px}
+.btn-confirm{flex:1;padding:11px;background:var(--accent);border:none;
+  border-radius:10px;color:#fff;cursor:pointer;font-size:14px;font-weight:600}
+.room-link{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:12px;font-size:13px;color:var(--accent);word-break:break-all;margin-bottom:12px;display:none}
+
+/* Loading */
+.typing-indicator{display:flex;gap:4px;align-items:center;padding:4px 0}
+.typing-indicator span{width:7px;height:7px;border-radius:50%;
+  background:var(--muted);animation:typing 1.2s ease infinite}
+.typing-indicator span:nth-child(2){animation-delay:.2s}
+.typing-indicator span:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,80%,100%{transform:scale(.8);opacity:.5}40%{transform:scale(1);opacity:1}}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:12px 20px;font-size:14px;z-index:999;
+  animation:toastIn .3s ease;pointer-events:none}
+.toast.ok{border-color:var(--green);color:var(--green)}
+.toast.err{border-color:var(--red);color:var(--red)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Responsive */
+@media(max-width:768px){
+  .sidebar{position:fixed;left:-280px;z-index:50;transition:left .3s}
+  .sidebar.open{left:0}
+  .menu-btn{display:flex!important}
+}
+.menu-btn{display:none;background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:7px 10px;cursor:pointer;font-size:18px;color:var(--text)}
+</style>
+</head>
+<body>
+
+<!-- ══ LANDING PAGE ══ -->
+<div id="landingPage" class="page active">
+  <div class="landing-logo"><img src="./Gemini_Generated_Image_z40vx6z40vx6z40v.png" alt=""></div>
+  <h1 class="landing-title">AI Mentor</h1>
+  <p class="landing-sub">Dunyodagi barcha fanlarni o'rgatuvchi sun'iy intellekt ustoz. Kodlash, matematika, tillar va yana ko'p narsalar!</p>
+  <div class="features">
+    <div class="feat"><div class="icon">💻</div><p>Kodlash va dasturlash</p></div>
+    <div class="feat"><div class="icon">🌍</div><p>Barcha tillarda gaplashadi</p></div>
+    <div class="feat"><div class="icon">👥</div><p>Guruh chatlari</p></div>
+    <div class="feat"><div class="icon">🤖</div><p>Ikki AI yordamchi</p></div>
+    <div class="feat"><div class="icon">📁</div><p>Fayl yaratib yuklash</p></div>
+    <div class="feat"><div class="icon">🔒</div><p>Yuz orqali kirish</p></div>
+  </div>
+  <div class="btn-group">
+    <button class="btn btn-primary" onclick="showAuth('register')">Ro'yxatdan o'tish</button>
+    <button class="btn btn-secondary" onclick="showAuth('login')">Kirish</button>
+  </div>
+</div>
+
+<!-- ══ AUTH PAGE ══ -->
+<div id="authPage" class="page">
+  <div class="auth-box">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="loginTab" onclick="switchAuthTab('login')">Kirish</button>
+      <button class="auth-tab" id="registerTab" onclick="switchAuthTab('register')">Ro'yxat</button>
+    </div>
+
+    <!-- Camera -->
+    <div class="cam-container">
+      <video id="camVideo" autoplay muted playsinline></video>
+      <div class="cam-overlay">
+        <div class="face-ring" id="faceRing"></div>
+      </div>
+    </div>
+    <div class="cam-status" id="camStatus">Kamerani ishga tushirish...</div>
+
+    <!-- Login -->
+    <div id="loginForm">
+      <div class="auth-title">Xush kelibsiz 👋</div>
+      <div class="auth-sub">Ismingizni kiriting va yuzingizni ko'rsating</div>
+      <div class="inp-group">
+        <label>Foydalanuvchi nomi</label>
+        <input class="inp" id="loginUsername" placeholder="Ismingiz..." type="text">
+      </div>
+      <button class="btn-full" id="loginBtn" onclick="doLogin()">🔐 Yuz bilan kirish</button>
+    </div>
+
+    <!-- Register -->
+    <div id="registerForm" style="display:none">
+      <div class="auth-title">Yangi hisob 🚀</div>
+      <div class="auth-sub">Ismingizni kiriting va yuzingizni ro'yxatdan o'tkazing</div>
+      <div class="inp-group">
+        <label>Foydalanuvchi nomi</label>
+        <input class="inp" id="regUsername" placeholder="Ismingiz..." type="text">
+      </div>
+      <button class="btn-full" id="regBtn" onclick="doRegister()">📷 Yuz bilan ro'yxat</button>
+    </div>
+
+    <button class="btn-secondary" style="width:100%;margin-top:12px;padding:10px;border-radius:10px;cursor:pointer;font-size:13px" onclick="showPage('landingPage')">← Orqaga</button>
+  </div>
+</div>
+
+<!-- ══ APP PAGE ══ -->
+<div id="appPage" class="page">
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <span><img src="./Gemini_Generated_Image_z40vx6z40vx6z40v.png" alt=""></span>
+        <strong>AI Mentor</strong>
+      </div>
+      <div class="user-chip">
+        <div class="user-avatar" id="userAvatarSide">U</div>
+        <span class="user-name" id="usernameSide">Foydalanuvchi</span>
+      </div>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section">Chat</div>
+      <div class="nav-item active" id="nav-mentor" onclick="openChat('mentor')">
+        <span class="icon"><img src="./Gemini_Generated_Image_z40vx6z40vx6z40v.png" alt=""></span> AI Mentor
+      </div>
+      <div class="nav-item" id="nav-gpt" onclick="openChat('gpt')">
+        <span class="icon">🤖</span> AiGPT
+      </div>
+
+      <div class="nav-section">Guruhlar</div>
+      <div class="rooms-list" id="roomsList"></div>
+      <button class="btn-new-room" onclick="openRoomModal()">+ Yangi guruh</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn-logout" onclick="doLogout()">🚪 Chiqish</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="chat-header">
+      <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+      <div class="chat-header-icon" id="chatIcon">🎓</div>
+      <div class="chat-header-info">
+        <h3 id="chatTitle">AI Mentor</h3>
+        <p id="chatSubtitle">Barcha fanlarni o'rgatuvchi AI</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="clearChat()">🗑 Tozalash</button>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcomeScreen">
+        <h2>Salom! Men AI Mentor 🎓</h2>
+        <p>Kodlash, matematika, tillar va boshqa barcha savollarga javob beraman. Guruh yaratib do'stlaringizni ham taklif qiling!</p>
+        <div class="quick-btns">
+          <div class="quick-btn" onclick="quickSend('React da oddiy komponent qilib ber')">React komponenti</div>
+          <div class="quick-btn" onclick="quickSend('Python da hello world')">Python kodi</div>
+          <div class="quick-btn" onclick="quickSend('Ingliz tilini qanday o\'rganaman?')">Til o'rganish</div>
+          <div class="quick-btn" onclick="quickSend('Oddiy HTML sayt kodini faylga yoziber')">HTML sayt fayli</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <div class="input-row">
+        <textarea id="msgInput" rows="1" placeholder="Savol yozing... (Guruhda @AI_Mentor yoki @AiGPT)" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+      </div>
+      <div class="input-hint">Fayl olish uchun: "faylga yoziber" • Guruhda: @AI_Mentor yoki @AiGPT</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ROOM MODAL ══ -->
+<div class="modal-overlay" id="roomModal">
+  <div class="modal">
+    <h3>Guruh Chat</h3>
+    <p>Yangi guruh yarating yoki mavjud guruhga qo'shiling</p>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="createTab" onclick="switchRoomTab('create')">Yaratish</button>
+      <button class="modal-tab" id="joinTab" onclick="switchRoomTab('join')">Qo'shilish</button>
+    </div>
+    <div id="createRoomForm">
+      <div class="inp-group">
+        <label>Guruh nomi</label>
+        <input class="inp" id="roomNameInp" placeholder="Masalan: React o'rganuvchilar">
+      </div>
+      <div class="room-link" id="roomLinkBox"></div>
+    </div>
+    <div id="joinRoomForm" style="display:none">
+      <div class="inp-group">
+        <label>Guruh ID yoki havolasi</label>
+        <input class="inp" id="roomIdInp" placeholder="Havola yoki ID ni kiriting">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeRoomModal()">Bekor</button>
+      <button class="btn-confirm" id="roomConfirmBtn" onclick="confirmRoom()">Yaratish</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────
+let currentUser = null;
+let currentChat = 'mentor'; // 'mentor' | 'gpt' | roomId
+let chatHistories = { mentor: [], gpt: {} };
+let socket = null;
+let currentRoomId = null;
+let roomTab = 'create';
+let faceDescriptor = null;
+let faceApiReady = false;
+let videoStream = null;
+
+// Check URL for room invite
+const urlParams = new URLSearchParams(window.location.search);
+const inviteRoomId = urlParams.get('room');
+
+// ── Face API ─────────────────────────────────────────────
+async function loadFaceApi() {
+  try {
+    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    faceApiReady = true;
+    setCamStatus('Yuzingizni ko\'rsating', '');
+    startFaceScan();
+  } catch(e) {
+    setCamStatus('Face API yuklanmadi: ' + e.message, 'err');
+  }
+}
+
+async function startCamera() {
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    document.getElementById('camVideo').srcObject = videoStream;
+    document.getElementById('faceRing').className = 'face-ring scanning';
+    await loadFaceApi();
+  } catch(e) {
+    setCamStatus('Kamera ochilmadi: ' + e.message, 'err');
+  }
+}
+
+function stopCamera() {
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+}
+
+async function startFaceScan() {
+  const video = document.getElementById('camVideo');
+  const ring = document.getElementById('faceRing');
+  const detect = async () => {
+    if (!faceApiReady || !video.srcObject) return;
+    try {
+      const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks(true).withFaceDescriptor();
+      if (detection) {
+        faceDescriptor = Array.from(detection.descriptor);
+        ring.className = 'face-ring success';
+        setCamStatus('✓ Yuz aniqlandi!', 'ok');
+      } else {
+        faceDescriptor = null;
+        ring.className = 'face-ring scanning';
+        setCamStatus('Yuzingizni ko\'rsating...', '');
+      }
+    } catch(e) {}
+    setTimeout(detect, 800);
+  };
+  detect();
+}
+
+function setCamStatus(msg, type) {
+  const el = document.getElementById('camStatus');
+  el.textContent = msg;
+  el.className = 'cam-status' + (type ? ' ' + type : '');
+}
+
+// ── Page navigation ───────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showAuth(tab) {
+  showPage('authPage');
+  switchAuthTab(tab);
+  startCamera();
+}
+
+function switchAuthTab(tab) {
+  document.getElementById('loginForm').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('loginTab').className = 'auth-tab' + (tab === 'login' ? ' active' : '');
+  document.getElementById('registerTab').className = 'auth-tab' + (tab === 'register' ? ' active' : '');
+}
+
+// ── Auth ──────────────────────────────────────────────────
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  if (!username) return toast('Ism kiriting', 'err');
+  if (!faceDescriptor) return toast('Yuzingizni ko\'rsating', 'err');
+  const btn = document.getElementById('regBtn');
+  btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
+  try {
+    const r = await fetch('/api/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, faceDescriptor })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    toast('Muvaffaqiyatli ro\'yxatdan o\'tdingiz!', 'ok');
+    enterApp(username);
+  } catch(e) { toast(e.message, 'err'); btn.disabled = false; btn.textContent = '📷 Yuz bilan ro\'yxat'; }
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  if (!username) return toast('Ism kiriting', 'err');
+  if (!faceDescriptor) return toast('Yuzingizni ko\'rsating', 'err');
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Tekshirilmoqda...';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, faceDescriptor })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    toast('Xush kelibsiz, ' + username + '!', 'ok');
+    enterApp(username);
+  } catch(e) { toast(e.message, 'err'); btn.disabled = false; btn.textContent = '🔐 Yuz bilan kirish'; }
+}
+
+function enterApp(username) {
+  currentUser = username;
+  stopCamera();
+  document.getElementById('usernameSide').textContent = username;
+  document.getElementById('userAvatarSide').textContent = username[0].toUpperCase();
+  showPage('appPage');
+  initSocket();
+  loadRooms();
+  if (inviteRoomId) { setTimeout(() => joinRoomById(inviteRoomId), 500); }
+  else { setTimeout(() => openChat('mentor'), 300); }
+}
+
+function doLogout() {
+  currentUser = null;
+  if (socket) { socket.disconnect(); socket = null; }
+  showPage('landingPage');
+}
+
+// ── Socket ────────────────────────────────────────────────
+function initSocket() {
+  socket = io();
+  socket.on('newMessage', msg => {
+    if (currentRoomId && msg) appendRoomMessage(msg);
+  });
+  socket.on('userJoined', ({ username }) => {
+    if (username !== currentUser) appendSystemMsg(username + ' qo\'shildi');
+  });
+  socket.on('userLeft', ({ username }) => appendSystemMsg(username + ' chiqdi'));
+}
+
+// ── Rooms ─────────────────────────────────────────────────
+let myRooms = [];
+
+async function loadRooms() {
+  // Load from localStorage
+  const saved = JSON.parse(localStorage.getItem('myRooms_' + currentUser) || '[]');
+  myRooms = saved;
+  renderRoomsList();
+}
+
+function renderRoomsList() {
+  const el = document.getElementById('roomsList');
+  el.innerHTML = myRooms.map(r => `
+    <div class="room-item ${currentRoomId === r.id ? 'active' : ''}" onclick="openRoom('${r.id}','${r.name}')">
+      <div class="room-dot"></div>
+      <span>${r.name}</span>
+    </div>`).join('');
+}
+
+function openRoomModal() {
+  document.getElementById('roomModal').classList.add('open');
+  document.getElementById('roomLinkBox').style.display = 'none';
+  document.getElementById('roomNameInp').value = '';
+  document.getElementById('roomIdInp').value = '';
+  switchRoomTab('create');
+}
+function closeRoomModal() { document.getElementById('roomModal').classList.remove('open'); }
+
+function switchRoomTab(t) {
+  roomTab = t;
+  document.getElementById('createRoomForm').style.display = t === 'create' ? '' : 'none';
+  document.getElementById('joinRoomForm').style.display = t === 'join' ? '' : 'none';
+  document.getElementById('createTab').className = 'modal-tab' + (t === 'create' ? ' active' : '');
+  document.getElementById('joinTab').className = 'modal-tab' + (t === 'join' ? ' active' : '');
+  document.getElementById('roomConfirmBtn').textContent = t === 'create' ? 'Yaratish' : 'Qo\'shilish';
+}
+
+async function confirmRoom() {
+  if (roomTab === 'create') {
+    const name = document.getElementById('roomNameInp').value.trim();
+    if (!name) return toast('Guruh nomini kiriting', 'err');
+    try {
+      const r = await fetch('/api/rooms', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, creator: currentUser })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      // Show invite link
+      const link = window.location.origin + '?room=' + d.roomId;
+      document.getElementById('roomLinkBox').textContent = '🔗 ' + link;
+      document.getElementById('roomLinkBox').style.display = 'block';
+      document.getElementById('roomConfirmBtn').textContent = '✓ Yaratildi';
+      addRoomToList({ id: d.roomId, name: d.name });
+      toast('Guruh yaratildi! Havolani ulashing', 'ok');
+    } catch(e) { toast(e.message, 'err'); }
+  } else {
+    let inp = document.getElementById('roomIdInp').value.trim();
+    // Extract ID from URL if needed
+    if (inp.includes('?room=')) inp = inp.split('?room=')[1];
+    if (!inp) return toast('ID kiriting', 'err');
+    joinRoomById(inp);
+  }
+}
+
+async function joinRoomById(roomId) {
+  try {
+    const r = await fetch('/api/rooms/' + roomId + '/join', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username: currentUser })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    addRoomToList({ id: d.room.id, name: d.room.name });
+    closeRoomModal();
+    openRoom(d.room.id, d.room.name);
+    toast('Guruhga qo\'shildingiz!', 'ok');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function addRoomToList(room) {
+  if (!myRooms.find(r => r.id === room.id)) {
+    myRooms.push(room);
+    localStorage.setItem('myRooms_' + currentUser, JSON.stringify(myRooms));
+    renderRoomsList();
+  }
+}
+
+async function openRoom(roomId, roomName) {
+  currentRoomId = roomId;
+  currentChat = 'room_' + roomId;
+  // Update nav
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  renderRoomsList();
+  // Update header
+  document.getElementById('chatIcon').textContent = '👥';
+  document.getElementById('chatTitle').textContent = roomName;
+  document.getElementById('chatSubtitle').textContent = '@AI_Mentor yoki @AiGPT bilan gaplashing';
+  // Join socket room
+  if (socket) socket.emit('joinRoom', { roomId, username: currentUser });
+  // Load messages
+  clearMessages();
+  try {
+    const r = await fetch('/api/rooms/' + roomId + '/messages');
+    const msgs = await r.json();
+    msgs.forEach(m => appendRoomMessage(m));
+  } catch(e) {}
+}
+
+function appendRoomMessage(msg) {
+  hideWelcome();
+  const isMe = msg.sender === currentUser;
+  const isAIMentor = msg.aiType === 'mentor';
+  const isAIGPT = msg.aiType === 'gpt';
+  const cls = isMe ? 'user' : (isAIMentor ? 'ai-mentor' : (isAIGPT ? 'ai-gpt' : ''));
+  const avatar = isAIMentor ? '🎓' : (isAIGPT ? '🤖' : msg.sender[0].toUpperCase());
+  addMessage({ text: msg.text, cls, name: msg.sender, avatar, isAI: msg.isAI });
+}
+
+function appendSystemMsg(text) {
+  const el = document.createElement('div');
+  el.style.cssText = 'text-align:center;font-size:12px;color:var(--muted);padding:4px';
+  el.textContent = text;
+  document.getElementById('messages').appendChild(el);
+  scrollDown();
+}
+
+// ── Personal Chat ─────────────────────────────────────────
+async function openChat(type) {
+  currentRoomId = null;
+  currentChat = type;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-' + type).classList.add('active');
+  renderRoomsList();
+  if (type === 'mentor') {
+    document.getElementById('chatIcon').textContent = '🎓';
+    document.getElementById('chatTitle').textContent = 'AI Mentor';
+    document.getElementById('chatSubtitle').textContent = 'Barcha fanlarni o\'rgatuvchi AI';
+  } else {
+    document.getElementById('chatIcon').textContent = '🤖';
+    document.getElementById('chatTitle').textContent = 'AiGPT';
+    document.getElementById('chatSubtitle').textContent = 'Universal AI yordamchi';
+  }
+  clearMessages();
+  // Load chat history from server
+  try {
+    const r = await fetch('/api/chat/' + currentUser + '/' + type);
+    const msgs = await r.json();
+    if (msgs.length === 0) { showWelcome(); return; }
+    msgs.forEach(m => {
+      if (m.role === 'user') {
+        addMessage({ text: m.content, cls: 'user', name: currentUser, avatar: currentUser[0].toUpperCase() });
+      } else {
+        addMessage({
+          text: m.content, isAI: true,
+          cls: type === 'mentor' ? 'ai-mentor' : 'ai-gpt',
+          name: type === 'mentor' ? 'AI Mentor' : 'AiGPT',
+          avatar: type === 'mentor' ? '🎓' : '🤖'
+        });
+      }
+    });
+  } catch(e) { showWelcome(); }
+}
+
+// ── Send Message ──────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+  hideWelcome();
+
+  if (currentRoomId) {
+    // Room message
+    addMessage({ text, cls: 'user', name: currentUser, avatar: currentUser[0].toUpperCase() });
+    if (socket) socket.emit('sendMessage', { roomId: currentRoomId, sender: currentUser, text });
+  } else {
+    // Personal AI chat
+    addMessage({ text, cls: 'user', name: currentUser, avatar: currentUser[0].toUpperCase() });
+    const type = currentChat;
+    const typingId = addTyping(type === 'mentor' ? '🎓' : '🤖', type === 'mentor' ? 'AI Mentor' : 'AiGPT');
+
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ message: text, username: currentUser, type })
+      });
+      const d = await r.json();
+      removeTyping(typingId);
+      if (d.error) throw new Error(d.error);
+      addMessage({
+        text: d.result, isAI: true,
+        cls: type === 'mentor' ? 'ai-mentor' : 'ai-gpt',
+        name: type === 'mentor' ? 'AI Mentor' : 'AiGPT',
+        avatar: type === 'mentor' ? '🎓' : '🤖'
+      });
+    } catch(e) {
+      removeTyping(typingId);
+      addMessage({ text: '❌ Xato: ' + e.message, cls: 'ai-mentor', name: 'Tizim', avatar: '⚠️' });
+    }
+  }
+}
+
+function quickSend(text) {
+  document.getElementById('msgInput').value = text;
+  sendMessage();
+}
+
+// ── Message rendering ─────────────────────────────────────
+function addMessage({ text, cls, name, avatar, isAI }) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + (cls || '');
+
+  // Parse text: code blocks, file download
+  let html = parseMessage(text, isAI);
+
+  div.innerHTML = `
+    <div class="msg-avatar">${avatar}</div>
+    <div>
+      <div class="msg-name">${name}</div>
+      <div class="msg-bubble">${html}</div>
+    </div>`;
+  msgs.appendChild(div);
+  scrollDown();
+}
+
+function parseMessage(text, isAI) {
+  let html = '';
+  let hasFile = false;
+  let fileCode = '';
+  let fileLang = 'txt';
+
+  // Check for ##FAYL## marker
+  if (isAI && text.includes('##FAYL##')) {
+    const parts = text.split('##FAYL##');
+    text = parts[0].trim();
+    hasFile = true;
+    // Extract code from last code block
+    const codeMatch = parts[1].match(/```(\w+)?\n?([\s\S]+?)```/);
+    if (codeMatch) { fileLang = codeMatch[1] || 'txt'; fileCode = codeMatch[2]; }
+    else fileCode = parts[1].trim();
+  }
+
+  // Code blocks
+  text = text.replace(/```(\w+)?\n?([\s\S]+?)```/g, (_, lang, code) => {
+    const id = 'code_' + Math.random().toString(36).slice(2);
+    lang = lang || 'code';
+    return `<pre><code id="${id}">${escHtml(code.trim())}</code><button class="copy-code-btn" onclick="copyCode('${id}')">📋 Nusxa</button></pre>`;
+  });
+
+  // Inline code
+  text = text.replace(/`([^`]+)`/g, '<code style="background:#1a1a30;padding:2px 6px;border-radius:4px">$1</code>');
+  // Bold
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Newlines
+  text = text.replace(/\n/g, '<br>');
+  html = text;
+
+  if (hasFile && fileCode) {
+    const ext = langToExt(fileLang);
+    const encoded = btoa(unescape(encodeURIComponent(fileCode)));
+    html += `<br><button class="download-btn" onclick="downloadFile('${encoded}','fayl.${ext}')">📥 ${fileLang} faylini yuklab olish</button>`;
+  }
+  return html;
+}
+
+function langToExt(lang) {
+  const m = {javascript:'js',js:'js',python:'py',html:'html',css:'css',react:'jsx',jsx:'jsx',
+    typescript:'ts',ts:'ts',java:'java',cpp:'cpp',c:'c',php:'php',sql:'sql',json:'json'};
+  return m[lang.toLowerCase()] || 'txt';
+}
+
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyCode(id) {
+  const el = document.getElementById(id);
+  if (el) navigator.clipboard.writeText(el.textContent).then(() => toast('Nusxalandi!', 'ok'));
+}
+
+function downloadFile(encoded, name) {
+  const text = decodeURIComponent(escape(atob(encoded)));
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+// Typing indicator
+function addTyping(avatar, name) {
+  const id = 'typing_' + Date.now();
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.id = id;
+  div.className = 'msg ai-mentor';
+  div.innerHTML = `<div class="msg-avatar">${avatar}</div>
+    <div><div class="msg-name">${name}</div>
+    <div class="msg-bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>`;
+  msgs.appendChild(div);
+  scrollDown();
+  return id;
+}
+function removeTyping(id) { const el = document.getElementById(id); if (el) el.remove(); }
+
+function scrollDown() {
+  const m = document.getElementById('messages');
+  m.scrollTop = m.scrollHeight;
+}
+function clearMessages() {
+  document.getElementById('messages').innerHTML = '';
+}
+function hideWelcome() {
+  const w = document.getElementById('welcomeScreen');
+  if (w) w.style.display = 'none';
+}
+function showWelcome() {
+  const msgs = document.getElementById('messages');
+  if (!document.getElementById('welcomeScreen')) {
+    msgs.innerHTML = `<div class="welcome" id="welcomeScreen">
+      <h2>Salom! Men AI Mentor 🎓</h2>
+      <p>Kodlash, matematika, tillar va boshqa barcha savollarga javob beraman.</p>
+      <div class="quick-btns">
+        <div class="quick-btn" onclick="quickSend('React da oddiy komponent qilib ber')">React komponenti</div>
+        <div class="quick-btn" onclick="quickSend('Python da hello world')">Python kodi</div>
+        <div class="quick-btn" onclick="quickSend('Ingliz tilini qanday o\\'rganaman?')">Til o'rganish</div>
+        <div class="quick-btn" onclick="quickSend('Oddiy HTML sayt kodini faylga yoziber')">HTML sayt fayli</div>
+      </div></div>`;
+  } else {
+    document.getElementById('welcomeScreen').style.display = '';
+  }
+}
+async function clearChat() {
+  const type = currentChat;
+  if (!currentRoomId && (type === 'mentor' || type === 'gpt')) {
+    try { await fetch('/api/chat/' + currentUser + '/' + type, { method: 'DELETE' }); } catch(e) {}
+  }
+  clearMessages();
+  if (!currentRoomId) showWelcome();
+  toast('Chat tozalandi', 'ok');
+}
+
+// ── Input helpers ─────────────────────────────────────────
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function toast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── Init ──────────────────────────────────────────────────
+window.onload = () => {
+  if (inviteRoomId) {
+    showAuth('login');
+  }
+};
+</script>
+</body>
+</html>
